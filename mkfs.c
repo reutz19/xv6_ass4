@@ -10,6 +10,7 @@
 #include "fs.h"
 #include "stat.h"
 #include "param.h"
+#include "mbr.h"
 
 #ifndef static_assert
 #define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
@@ -31,7 +32,7 @@ struct superblock sb;
 char zeroes[BSIZE];
 uint freeinode = 1;
 uint freeblock;
-
+struct mbr mbrbl;
 
 void balloc(int);
 void wsect(uint, void*);
@@ -89,6 +90,23 @@ main(int argc, char *argv[])
     perror(argv[1]);
     exit(1);
   }
+
+  //setup first partition
+  struct dpartition zero_part;
+  zero_part.flags = PART_ALLOCATED | PART_BOOTABLE;
+  zero_part.type = FS_INODE;
+  zero_part.offset = 1; 
+  zero_part.size = FSSIZE;
+
+  //create mbr and write it to disk
+  mbrbl.partitions[0] = zero_part;       //set partition 0
+  mbrbl.magic[0] = 0x55;                    
+  mbrbl.magic[1] = 0xAA;                    //set magic numbers
+  
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &mbrbl, sizeof(mbrbl));
+  wsect(0, buf);                      // write mbr to disk block 0
+
 
   // 1 fs block = 1 disk sector
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
