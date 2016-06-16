@@ -19,6 +19,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "file.h"
+#include "mbr.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
@@ -166,6 +167,7 @@ iinit(int dev)
   readsb(dev, &sb);
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
+  readmbr(ROOTDEV);
 }
 
 static struct inode* iget(uint dev, uint inum);
@@ -649,3 +651,53 @@ nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
 }
+
+const char* printBootable(const struct dpartition *pr)
+{
+  if (pr->flags & PART_BOOTABLE)
+    return "YES";
+  else 
+    return "NO";
+}
+
+const char* printType(const struct dpartition *pr)
+{
+  switch (pr->type & PART_BOOTABLE) {
+    case FS_INODE:        
+      return "INODE";
+    case FS_FAT:        
+      return "FAT";
+  }
+
+  return "NO TYPE"; //error 
+}
+
+void
+readmbr(int dev)
+{
+  //cprintf("start readmbr! \n");
+  int i;
+  struct buf *bp;
+  struct mbr dmbr;
+
+  bp = bread(dev, 0);               // read block 
+  memmove(&dmbr, bp->data, BSIZE);  // take mbr data from within the readed block
+  brelse(bp);
+
+  //cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr.magic[0], dmbr.magic[1]);
+  for (i = 0; i < NPARTITIONS; i++)
+  {    
+    //cprintf("readmbr: partitions %d flags = %d \n", i, dmbr.partitions[i].flags);
+    
+    if ((dmbr.partitions[i].flags & PART_ALLOCATED)) 
+    {
+      cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
+            i,
+            printBootable(&(dmbr.partitions[i])),
+            printType(&(dmbr.partitions[i])), 
+            dmbr.partitions[i].offset, 
+            dmbr.partitions[i].size);
+    }
+  }
+}
+

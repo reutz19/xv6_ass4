@@ -74,7 +74,6 @@ main(int argc, char *argv[])
   char buf[BSIZE];
   struct dinode din;
 
-
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
   if(argc < 2){
@@ -92,21 +91,23 @@ main(int argc, char *argv[])
   }
 
   //setup first partition
-  struct dpartition zero_part;
-  zero_part.flags = PART_ALLOCATED | PART_BOOTABLE;
-  zero_part.type = FS_INODE;
-  zero_part.offset = 1; 
-  zero_part.size = FSSIZE;
+  struct dpartition* zero_part = &(mbrbl.partitions[0]);
+  zero_part->flags = (PART_ALLOCATED | PART_BOOTABLE);
+  zero_part->type = FS_INODE;
+  zero_part->offset = 1; 
+  zero_part->size = FSSIZE;
 
   //create mbr and write it to disk
-  mbrbl.partitions[0] = zero_part;       //set partition 0
+  for (i = 1; i < NPARTITIONS; i++)
+  {
+    mbrbl.partitions[i].flags = 0;      // make sure that all other partition flags are set to not allocated
+  }
   mbrbl.magic[0] = 0x55;                    
-  mbrbl.magic[1] = 0xAA;                    //set magic numbers
+  mbrbl.magic[1] = 0xAA;                //set magic numbers
   
   memset(buf, 0, sizeof(buf));
   memmove(buf, &mbrbl, sizeof(mbrbl));
-  wsect(0, buf);                      // write mbr to disk block 0
-
+  wsect(0, buf);                        // write mbr to disk block 0
 
   // 1 fs block = 1 disk sector
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
@@ -125,7 +126,7 @@ main(int argc, char *argv[])
 
   freeblock = nmeta;     // the first free block that we can allocate
 
-  for(i = 0; i < FSSIZE; i++)
+  for(i = 1; i < FSSIZE; i++)
     wsect(i, zeroes);
 
   memset(buf, 0, sizeof(buf));
