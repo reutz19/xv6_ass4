@@ -15,6 +15,7 @@ struct inode {
   uint inum;          // Inode number
   int ref;            // Reference count
   int flags;          // I_BUSY, I_VALID
+  int prnum;          // partition number
 
   short type;         // copy of disk inode
   short major;

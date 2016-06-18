@@ -8,6 +8,7 @@ struct rtcdate;
 struct spinlock;
 struct stat;
 struct superblock;
+struct mbr;
 
 // bio.c
 void            binit(void);
@@ -51,7 +52,7 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
-void 			readmbr(int dev);
+void 			readmbr(int dev, struct mbr* dmbr);
 
 // ide.c
 void            ideinit(void);

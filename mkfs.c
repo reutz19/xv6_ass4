@@ -32,7 +32,7 @@ struct superblock sb;
 char zeroes[BSIZE];
 uint freeinode = 1;
 uint freeblock;
-struct mbr mbrbl;
+struct mbr mbrbl;     // mbr block
 
 void balloc(int);
 void wsect(uint, void*);
@@ -66,6 +66,43 @@ xint(uint x)
 }
 
 int
+write_kernel(char* kernel_file)
+{
+  char buf[BSIZE];
+
+  // Open kernel file
+  int kernel_fd = open(kernel_file, O_RDONLY, 0666);
+  if(kernel_fd < 0){
+    perror(kernel_file);
+    exit(1);
+  }
+
+  // Get kernel size (bytes)
+  off_t fsize;
+  fsize = lseek(kernel_fd, 0, SEEK_END);
+  lseek(kernel_fd, 0, SEEK_SET);
+
+  int kernel_size = fsize;
+  printf("kernel file size = %d\n", kernel_size);
+  
+  // Copy block after block
+  int block_offset = 1; // first kernel block is 1
+  while (kernel_size > 0) {
+    // Determine size to copy
+    int copy_size = (kernel_size > BSIZE) ? BSIZE : kernel_size;
+    memset(buf, 0, BSIZE);
+    read(kernel_fd, buf, copy_size);
+    wsect(block_offset, buf);
+    // Update next block and size left
+    ++block_offset;
+    kernel_size -= copy_size;
+  }
+
+  printf("kernel last block = %d\n", block_offset - 1);
+  return block_offset - 1; // return the last block of kernel
+}
+
+int
 main(int argc, char *argv[])
 {
   int i, cc, fd;
@@ -76,7 +113,7 @@ main(int argc, char *argv[])
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
-  if(argc < 2){
+  if(argc < 4){
     fprintf(stderr, "Usage: mkfs fs.img files...\n");
     exit(1);
   }
@@ -90,12 +127,23 @@ main(int argc, char *argv[])
     exit(1);
   }
 
+  int bootbl_fd = open(argv[2], O_RDONLY, 0666);
+  if(bootbl_fd < 0){
+    perror(argv[2]);
+    exit(1);
+  }
+
+  memset(mbrbl.bootstrap, 0, BOOTSTRAP);
+  read(bootbl_fd, mbrbl.bootstrap, BOOTSTRAP);
+
+  int last_kernel_block = write_kernel(argv[3]);
+
   //setup first partition
-  struct dpartition* zero_part = &(mbrbl.partitions[0]);
-  zero_part->flags = (PART_ALLOCATED | PART_BOOTABLE);
-  zero_part->type = FS_INODE;
-  zero_part->offset = 1; 
-  zero_part->size = FSSIZE;
+  struct dpartition* curr_partition = &(mbrbl.partitions[0]);
+  curr_partition->flags = PART_ALLOCATED;
+  curr_partition->type = FS_INODE;
+  curr_partition->offset = last_kernel_block + 1; // bob
+  curr_partition->size = FSSIZE;
 
   //create mbr and write it to disk
   for (i = 1; i < NPARTITIONS; i++)
@@ -104,34 +152,32 @@ main(int argc, char *argv[])
   }
   mbrbl.magic[0] = 0x55;                    
   mbrbl.magic[1] = 0xAA;                //set magic numbers
-  
-  memset(buf, 0, sizeof(buf));
-  memmove(buf, &mbrbl, sizeof(mbrbl));
-  wsect(0, buf);                        // write mbr to disk block 0
 
+  uint currpr_offset = curr_partition->offset;
   // 1 fs block = 1 disk sector
-  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+  nmeta = 1 + nlog + ninodeblocks + nbitmap;
   nblocks = FSSIZE - nmeta;
 
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(NINODES);
   sb.nlog = xint(nlog);
-  sb.logstart = xint(2);
-  sb.inodestart = xint(2+nlog);
-  sb.bmapstart = xint(2+nlog+ninodeblocks);
+  sb.logstart = xint(currpr_offset + 1);
+  sb.inodestart = xint(currpr_offset + 1 + nlog);
+  sb.bmapstart = xint(currpr_offset + 1 + nlog + ninodeblocks);
 
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
          nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
 
-  freeblock = nmeta;     // the first free block that we can allocate
+  freeblock = currpr_offset + nmeta;     // the first free block that we can allocate
 
-  for(i = 1; i < FSSIZE; i++)
-    wsect(i, zeroes);
+  //zero all partition
+  for(i = 0; i < FSSIZE; i++)
+    wsect(currpr_offset + i, zeroes);
 
   memset(buf, 0, sizeof(buf));
   memmove(buf, &sb, sizeof(sb));
-  wsect(1, buf);
+  wsect(currpr_offset, buf);
 
   rootino = ialloc(T_DIR);
   assert(rootino == ROOTINO);
@@ -146,7 +192,10 @@ main(int argc, char *argv[])
   strcpy(de.name, "..");
   iappend(rootino, &de, sizeof(de));
 
-  for(i = 2; i < argc; i++){
+  int sh_exist = 0;
+  int init_exist = 0;
+
+  for(i = 4; i < argc; i++){
     assert(index(argv[i], '/') == 0);
 
     if((fd = open(argv[i], 0)) < 0){
@@ -168,11 +217,23 @@ main(int argc, char *argv[])
     strncpy(de.name, argv[i], DIRSIZ);
     iappend(rootino, &de, sizeof(de));
 
+    if (strlen(argv[i]) == 2 && strncmp(argv[i], "sh", 2) == 0)
+      sh_exist = 1;
+    else if (strlen(argv[i]) == 4 && strncmp(argv[i], "init", 4) == 0)
+      init_exist = 1;
+
     while((cc = read(fd, buf, sizeof(buf))) > 0)
       iappend(inum, buf, cc);
 
     close(fd);
   }
+
+  if (sh_exist && init_exist)
+    curr_partition->flags |= PART_BOOTABLE;
+  
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &mbrbl, sizeof(mbrbl));
+  wsect(0, buf);                        // write mbr to disk block 0
 
   // fix size of root inode dir
   rinode(rootino, &din);

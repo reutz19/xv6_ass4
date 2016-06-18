@@ -24,14 +24,38 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
 struct superblock sb;   // there should be one per dev, but we run with one dev
+struct mbr mbr;
+int bootable_partition = -1;
+
+//go ovr mbr and return the first partition that has sh and init else return -1;
+int
+get_bootable_partition(void)
+{
+  int i;
+  for (i = 0; i < NPARTITIONS; i++)
+  {        
+    if ((mbr.partitions[i].flags & PART_ALLOCATED) &&
+        (mbr.partitions[i].flags & PART_BOOTABLE) ) 
+    {
+      return i;
+    }
+  }
+  return -1;
+}
 
 // Read the super block.
 void
 readsb(int dev, struct superblock *sb)
 {
   struct buf *bp;
-  
-  bp = bread(dev, 1);
+  struct dpartition *dpr;
+
+  if ((bootable_partition = get_bootable_partition()) < 0)
+    panic("no bootablr partition");
+  else
+    dpr = &(mbr.partitions[bootable_partition]);
+
+  bp = bread(dev, dpr->offset); // read device bootable partition superblock 
   memmove(sb, bp->data, sizeof(*sb));
   brelse(bp);
 }
@@ -164,10 +188,13 @@ void
 iinit(int dev)
 {
   initlock(&icache.lock, "icache");
+  readmbr(dev, &mbr);
+  // Read superblock and set root's "/" inode partition number, set in readsb()
   readsb(dev, &sb);
+  proc->cwd->prnum = bootable_partition;
+
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
-  readmbr(ROOTDEV);
 }
 
 static struct inode* iget(uint dev, uint inum);
@@ -630,6 +657,7 @@ namex(char *path, int nameiparent, char *name)
       return 0;
     }
     iunlockput(ip);
+    next->prnum = ip->prnum;
     ip = next;
   }
   if(nameiparent){
@@ -673,30 +701,31 @@ const char* printType(const struct dpartition *pr)
 }
 
 void
-readmbr(int dev)
+readmbr(int dev, struct mbr* dmbr)
 {
-  //cprintf("start readmbr! \n");
+  cprintf("start readmbr! \n");
   int i;
   struct buf *bp;
-  struct mbr dmbr;
 
   bp = bread(dev, 0);               // read block 
-  memmove(&dmbr, bp->data, BSIZE);  // take mbr data from within the readed block
+  cprintf("readmbr:after bread \n");
+  memmove(dmbr, bp->data, BSIZE);  // take mbr data from within the readed block
+  cprintf("readmbr:after memmove \n");
   brelse(bp);
 
-  //cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr.magic[0], dmbr.magic[1]);
+  cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr->magic[0], dmbr->magic[1]);
   for (i = 0; i < NPARTITIONS; i++)
   {    
-    //cprintf("readmbr: partitions %d flags = %d \n", i, dmbr.partitions[i].flags);
+    cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
     
-    if ((dmbr.partitions[i].flags & PART_ALLOCATED)) 
+    if ((dmbr->partitions[i].flags & PART_ALLOCATED)) 
     {
       cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
             i,
-            printBootable(&(dmbr.partitions[i])),
-            printType(&(dmbr.partitions[i])), 
-            dmbr.partitions[i].offset, 
-            dmbr.partitions[i].size);
+            printBootable(&(dmbr->partitions[i])),
+            printType(&(dmbr->partitions[i])), 
+            dmbr->partitions[i].offset, 
+            dmbr->partitions[i].size);
     }
   }
 }
