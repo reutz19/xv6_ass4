@@ -58,7 +58,7 @@ initlog(int dev)
   struct superblock sb;
   initlock(&log.lock, "log");
   readsb(dev, &sb);
-  log.start = sb.logstart;
+  log.start = sb.logstart + sb_off;
   log.size = sb.nlog;
   log.dev = dev;
   recover_from_log();

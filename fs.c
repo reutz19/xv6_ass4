@@ -27,7 +27,6 @@ static void itrunc(struct inode*);
 struct superblock sb;   // there should be one per dev, but we run with one dev
 struct mbr mbr;
 int bootable_partition = -1;
-uint sb_off;
 
 //go ovr mbr and return the first partition that has sh and init else return -1;
 int
@@ -557,7 +556,7 @@ writei(struct inode *ip, char *src, uint off, uint n)
     return -1;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE));
+    bp = bread(ip->dev, bmap(ip, off/BSIZE) + sb_off);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(bp->data + off%BSIZE, src, m);
     log_write(bp);

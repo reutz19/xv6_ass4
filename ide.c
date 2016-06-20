@@ -56,7 +56,7 @@ ideinit(void)
   
   // Check if disk 1 is present
   outb(0x1f6, 0xe0 | (1<<4));
-  for(i=0; i<1000; i++){
+  for(i=0; i<5000; i++){
     if(inb(0x1f7) != 0){
       havedisk1 = 1;
       break;
@@ -73,7 +73,7 @@ idestart(struct buf *b)
 {
   if(b == 0)
     panic("idestart");
-  if(b->blockno >= FSSIZE)
+  if(b->blockno >= 5*FSSIZE)
     panic("incorrect blockno");
   int sector_per_block =  BSIZE/SECTOR_SIZE;
   int sector = b->blockno * sector_per_block;
