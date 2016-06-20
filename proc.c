@@ -97,7 +97,7 @@ userinit(void)
   p->tf->eip = 0;  // beginning of initcode.S
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
-  p->cwd = namei("/");
+  //p->cwd = namei("/");
 
   p->state = RUNNABLE;
 }
@@ -341,6 +341,7 @@ forkret(void)
     first = 0;
     iinit(ROOTDEV);
     initlog(ROOTDEV);
+    proc->cwd = namei("/");
   }
   
   // Return to "caller", actually trapret (see allocproc).

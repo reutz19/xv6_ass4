@@ -23,9 +23,11 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
+
 struct superblock sb;   // there should be one per dev, but we run with one dev
 struct mbr mbr;
 int bootable_partition = -1;
+uint sb_off;
 
 //go ovr mbr and return the first partition that has sh and init else return -1;
 int
@@ -43,6 +45,53 @@ get_bootable_partition(void)
   return -1;
 }
 
+const char* printBootable(const struct dpartition *pr)
+{
+  if (pr->flags & PART_BOOTABLE)
+    return "YES";
+  else 
+    return "NO";
+}
+
+const char* printType(const struct dpartition *pr)
+{
+  switch (pr->type & PART_BOOTABLE) {
+    case FS_INODE:        
+      return "INODE";
+    case FS_FAT:        
+      return "FAT";
+  }
+
+  return "NO TYPE"; //error 
+}
+
+void
+readmbr(int dev, struct mbr* dmbr)
+{
+  int i;
+  struct buf *bp;
+
+  bp = bread(dev, 0);               // read block 
+  memmove(dmbr, bp->data, BSIZE);  // take mbr data from within the readed block
+  brelse(bp);
+
+  //cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr->magic[0], dmbr->magic[1]);
+  for (i = 0; i < NPARTITIONS; i++)
+  {    
+    //cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
+    
+    if (dmbr->partitions[i].flags == PART_BOOTABLE || dmbr->partitions[i].flags == PART_BOTH)
+    {
+      cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
+            i,
+            printBootable(&(dmbr->partitions[i])),
+            printType(&(dmbr->partitions[i])), 
+            dmbr->partitions[i].offset, 
+            dmbr->partitions[i].size);
+    }
+  }
+}
+
 // Read the super block.
 void
 readsb(int dev, struct superblock *sb)
@@ -55,7 +104,8 @@ readsb(int dev, struct superblock *sb)
   else
     dpr = &(mbr.partitions[bootable_partition]);
 
-  bp = bread(dev, dpr->offset); // read device bootable partition superblock 
+  sb_off = dpr->offset;
+  bp = bread(dev, sb_off); // read device bootable partition superblock 
   memmove(sb, bp->data, sizeof(*sb));
   brelse(bp);
 }
@@ -83,7 +133,7 @@ balloc(uint dev)
 
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
+    bp = bread(dev, BBLOCK(b, sb) + sb_off);
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
@@ -107,7 +157,7 @@ bfree(int dev, uint b)
   int bi, m;
 
   readsb(dev, &sb);
-  bp = bread(dev, BBLOCK(b, sb));
+  bp = bread(dev, BBLOCK(b, sb) + sb_off);
   bi = b % BPB;
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
@@ -191,7 +241,7 @@ iinit(int dev)
   readmbr(dev, &mbr);
   // Read superblock and set root's "/" inode partition number, set in readsb()
   readsb(dev, &sb);
-  proc->cwd->prnum = bootable_partition;
+  //proc->cwd->prnum = bootable_partition;
 
   cprintf("sb: size %d nblocks %d ninodes %d nlog %d logstart %d inodestart %d bmap start %d\n", sb.size,
           sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart);
@@ -210,7 +260,7 @@ ialloc(uint dev, short type)
   struct dinode *dip;
 
   for(inum = 1; inum < sb.ninodes; inum++){
-    bp = bread(dev, IBLOCK(inum, sb));
+    bp = bread(dev, IBLOCK(inum, sb) + sb_off);
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
@@ -231,7 +281,7 @@ iupdate(struct inode *ip)
   struct buf *bp;
   struct dinode *dip;
 
-  bp = bread(ip->dev, IBLOCK(ip->inum, sb));
+  bp = bread(ip->dev, IBLOCK(ip->inum, sb) + sb_off);
   dip = (struct dinode*)bp->data + ip->inum%IPB;
   dip->type = ip->type;
   dip->major = ip->major;
@@ -274,6 +324,7 @@ iget(uint dev, uint inum)
   ip->inum = inum;
   ip->ref = 1;
   ip->flags = 0;
+  ip->prnum = bootable_partition;
   release(&icache.lock);
 
   return ip;
@@ -308,7 +359,7 @@ ilock(struct inode *ip)
   release(&icache.lock);
 
   if(!(ip->flags & I_VALID)){
-    bp = bread(ip->dev, IBLOCK(ip->inum, sb));
+    bp = bread(ip->dev, IBLOCK(ip->inum, sb) + sb_off);
     dip = (struct dinode*)bp->data + ip->inum%IPB;
     ip->type = dip->type;
     ip->major = dip->major;
@@ -399,7 +450,7 @@ bmap(struct inode *ip, uint bn)
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
-    bp = bread(ip->dev, addr);
+    bp = bread(ip->dev, addr + sb_off);
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
@@ -432,7 +483,7 @@ itrunc(struct inode *ip)
   }
   
   if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
+    bp = bread(ip->dev, ip->addrs[NDIRECT] + sb_off);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
@@ -478,7 +529,7 @@ readi(struct inode *ip, char *dst, uint off, uint n)
     n = ip->size - off;
 
   for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE));
+    bp = bread(ip->dev, bmap(ip, off/BSIZE) + sb_off);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(dst, bp->data + off%BSIZE, m);
     brelse(bp);
@@ -679,54 +730,3 @@ nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
 }
-
-const char* printBootable(const struct dpartition *pr)
-{
-  if (pr->flags & PART_BOOTABLE)
-    return "YES";
-  else 
-    return "NO";
-}
-
-const char* printType(const struct dpartition *pr)
-{
-  switch (pr->type & PART_BOOTABLE) {
-    case FS_INODE:        
-      return "INODE";
-    case FS_FAT:        
-      return "FAT";
-  }
-
-  return "NO TYPE"; //error 
-}
-
-void
-readmbr(int dev, struct mbr* dmbr)
-{
-  cprintf("start readmbr! \n");
-  int i;
-  struct buf *bp;
-
-  bp = bread(dev, 0);               // read block 
-  cprintf("readmbr:after bread \n");
-  memmove(dmbr, bp->data, BSIZE);  // take mbr data from within the readed block
-  cprintf("readmbr:after memmove \n");
-  brelse(bp);
-
-  cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr->magic[0], dmbr->magic[1]);
-  for (i = 0; i < NPARTITIONS; i++)
-  {    
-    cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
-    
-    if ((dmbr->partitions[i].flags & PART_ALLOCATED)) 
-    {
-      cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
-            i,
-            printBootable(&(dmbr->partitions[i])),
-            printType(&(dmbr->partitions[i])), 
-            dmbr->partitions[i].offset, 
-            dmbr->partitions[i].size);
-    }
-  }
-}
-
