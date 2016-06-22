@@ -89,3 +89,16 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// new SYS_Call
+int
+sys_mount(void)
+{
+  char* path;
+  uint pn;
+  // TODO: is DIRSIZ is the right value?
+  if(argptr(0, &path, DIRSIZ) < 0 || argint(1, &pn) < 0)
+    return -1;
+
+  return mount(path, pn);
+}

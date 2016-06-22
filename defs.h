@@ -52,7 +52,8 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
-void 			readmbr(int dev, struct mbr* dmbr);
+void 		readmbr(int dev, struct mbr* dmbr);
+int 		mount(char* path, uint pn);
 
 // ide.c
 void            ideinit(void);

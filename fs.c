@@ -727,5 +727,20 @@ namei(char *path)
 struct inode*
 nameiparent(char *path, char *name)
 {
-  return namex(path, 1, name);
+  return namex(path, 1, name)
 }
+
+
+// SYS_Call implementation inorder to access between different partitions
+// path - a  name of a directory
+// pn - partition number
+// return 0 on success, -1 on failure (path does not exists/not a directory etc.)
+int mount(char* path, uint pn)
+{
+
+
+  return 0;
+}
+
+
+
