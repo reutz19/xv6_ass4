@@ -247,7 +247,7 @@ main(int argc, char *argv[])
         iappend(inum, buf, cc);
 
       close(fd);
-    }
+    } // end inside for loop
 
     if (sh_exist && init_exist) {
       curr_partition->flags = PART_BOOTABLE;
@@ -263,7 +263,7 @@ main(int argc, char *argv[])
 
     balloc(freeblock);
     currpr_offset += FSSIZE;    // next partition
-  }
+  }// end outside for loop
 
   currpr_offset = 0;
   // write mbr to the disk block 0

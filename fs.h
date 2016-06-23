@@ -55,3 +55,20 @@ struct dirent {
   char name[DIRSIZ];
 };
 
+
+// -------- Mount table framework -------
+
+#define TOTALINODES (NINODE*NPARTITIONS)
+
+typedef struct pair pair;
+
+struct pair {
+  uint partition_id;
+  struct *inode inode;
+}; 
+
+struct mapEntry {
+  pair key;
+  pair value;
+  int used;
+};

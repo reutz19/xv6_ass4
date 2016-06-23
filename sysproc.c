@@ -95,10 +95,10 @@ int
 sys_mount(void)
 {
   char* path;
-  uint pn;
-  // TODO: is DIRSIZ is the right value?
-  if(argptr(0, &path, DIRSIZ) < 0 || argint(1, &pn) < 0)
+  int pn;
+  
+  if(argptr(0, &path, sizeof(path)) < 0 || argint(1, &pn) < 0)
     return -1;
 
-  return mount(path, pn);
+  return mount(path, (uint)pn);
 }

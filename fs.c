@@ -27,8 +27,10 @@ static void itrunc(struct inode*);
 struct superblock sb;   // there should be one per dev, but we run with one dev
 struct mbr mbr;
 int bootable_partition = -1;
+int curr_partition;
+struct mapEntry mountable[TOTALINODES];
 
-//go ovr mbr and return the first partition that has sh and init else return -1;
+// Go over mbr and return the first partition that has "sh" and "init" else return -1;
 int
 get_bootable_partition(void)
 {
@@ -62,6 +64,25 @@ const char* printType(const struct dpartition *pr)
   }
 
   return "NO TYPE"; //error 
+}
+
+void
+switchPartition(struct pair *key)
+{
+  curr_partition = key.partition_id;
+  sb_off = mbr.partition[key.partition_id].offset;
+  readsb(ROOTDEV, &sb);
+
+}
+
+void 
+initilizeMountable()
+{
+  int i;
+  for(i=0; i<TOTALINODES; i++)
+  {
+    mountable[i].used = 0;
+  }
 }
 
 void
@@ -730,6 +751,22 @@ nameiparent(char *path, char *name)
   return namex(path, 1, name)
 }
 
+// return the inode index of the key:<partition id, inode>  if it's already exist in the mount table
+// else, return 0
+int
+isMount(uint pn, struct inode* mnt_inode)
+{  
+  int p, i;
+  for(i=0; i<TOTALINODES; i++)
+  {
+    if(mountable[i].used ==1 && mountable[i].key.partition_id == pn && mountable[i].key.inode == mnt_inode)
+    {
+      break;
+      return i;
+    }
+  }
+  return 0;
+}
 
 // SYS_Call implementation inorder to access between different partitions
 // path - a  name of a directory
@@ -737,9 +774,26 @@ nameiparent(char *path, char *name)
 // return 0 on success, -1 on failure (path does not exists/not a directory etc.)
 int mount(char* path, uint pn)
 {
+  // empty path or illegal partition number
+  if (*path != '\0' || sizeof(*path) == 0 || pn > 4)
+    return -1;
+  
+  int p, i;
+  struct inode* mnt_inode = namei(path);
+  
+  //if the path and pn is alraady mounted so there is nothing to do
+  if(i = isMounted(pn, mnt_inode))
+    goto end;    
+  
+  memmove(mountable[i].key.inode, mnt_inode, strlen(mnt_inode));
+  mountable[i].key
 
-
-  return 0;
+  //mountArr.mounts[partition].partition = partitionNum;
+  //mountArr.mounts[partition].used = 1;
+   
+  end:
+    cprintf("Directory: %s is mounted to partition number:%d\n", path, pn);
+    return 0;
 }
 
 
