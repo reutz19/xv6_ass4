@@ -29,6 +29,7 @@ struct mbr mbr;
 int bootable_partition = -1;
 int curr_partition;
 struct mapEntry mountable[TOTALINODES];
+struct inode* findInMountable(char* path);
 
 // Go over mbr and return the first partition that has "sh" and "init" else return -1;
 int
@@ -67,12 +68,11 @@ const char* printType(const struct dpartition *pr)
 }
 
 void
-switchPartition(struct pair *key)
+switchPartition(uint partition_id)
 {
-  curr_partition = key.partition_id;
-  sb_off = mbr.partition[key.partition_id].offset;
+  curr_partition = partition_id;
+  sb_off = mbr.partitions[partition_id].offset;
   readsb(ROOTDEV, &sb);
-
 }
 
 void 
@@ -344,7 +344,8 @@ iget(uint dev, uint inum)
   ip->inum = inum;
   ip->ref = 1;
   ip->flags = 0;
-  ip->prnum = bootable_partition;
+  ip->prnum = bootable_partition; 
+  //ip->prnum = curr_partition;
   release(&icache.lock);
 
   return ip;
@@ -709,8 +710,19 @@ namex(char *path, int nameiparent, char *name)
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
-  else
+
+  else {
+    // check whether path is already mounted
+    ip = findInMountable(path); 
+    if(ip)
+    {
+      memset(path, 0, strlen(path));
+      memmove(path, "/", 1);
+      return ip;
+    }
+    // path is not mounted, continue as usuall
     ip = idup(proc->cwd);
+  }
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
@@ -748,18 +760,38 @@ namei(char *path)
 struct inode*
 nameiparent(char *path, char *name)
 {
-  return namex(path, 1, name)
+  return namex(path, 1, name);
 }
 
-// return the inode index of the key:<partition id, inode>  if it's already exist in the mount table
+// return 1 if the key:<partition id, inum> already exist in the mount table
+// if it exist but the value is different than apply the differences
 // else, return 0
 int
-isMount(uint pn, struct inode* mnt_inode)
+isMount(uint inum, uint Partition)
 {  
-  int p, i;
+  int i;
   for(i=0; i<TOTALINODES; i++)
   {
-    if(mountable[i].used ==1 && mountable[i].key.partition_id == pn && mountable[i].key.inode == mnt_inode)
+    if(mountable[i].used == 1 && mountable[i].key.partition_id == curr_partition && mountable[i].key.inum == inum)
+    {
+      // if values are different then overide it, otherwise do nothing
+      if(mountable[i].value.partition_id != Partition)
+        mountable[i].value.partition_id = Partition;
+      break;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+
+int
+findFreeEntry()
+{  
+  int i;
+  for(i=0; i<TOTALINODES; i++)
+  {
+    if(mountable[i].used == 0)
     {
       break;
       return i;
@@ -768,28 +800,81 @@ isMount(uint pn, struct inode* mnt_inode)
   return 0;
 }
 
+void
+updatePair(pair *pair, uint partition_id, uint inum)
+{
+  pair->partition_id = partition_id;
+  pair->inum = inum;
+}
+
+// return 1 if pair1 is equal to pair2
+int
+cmpPair(pair *pair1, pair *pair2)
+{
+  if((pair1->partition_id == pair2->partition_id) && (pair1->inum == pair2->inum))
+    return 1;
+  else
+    return 0;
+}
+
+struct inode* 
+findInMountable(char* path)
+{
+  int i;
+  struct pair newKey;
+  struct inode* ip = 0;
+  if(*path == '\0' && path == 0)
+    goto end;
+
+  ip = namei(path);
+  //uint inum;
+  //inum = ip->inum;
+  updatePair(&newKey, curr_partition, ip->inum);
+
+  for (i=0; i<(TOTALINODES); i++){
+    if(mountable[i].used == 1 && cmpPair(&(mountable[i].key), &newKey) == 1){ 
+      int partitionToSwtch = mountable[i].value.partition_id;
+      //cprintf("Mount has done: The directory path is = %s partition number = %d\n", , partitionToSwtch);
+      switchPartition(partitionToSwtch);   
+      ip = namei("/");
+      return ip;
+    }
+  }
+  
+  end:
+    return ip;
+
+}
+
+
 // SYS_Call implementation inorder to access between different partitions
 // path - a  name of a directory
 // pn - partition number
 // return 0 on success, -1 on failure (path does not exists/not a directory etc.)
 int mount(char* path, uint pn)
 {
-  // empty path or illegal partition number
-  if (*path != '\0' || sizeof(*path) == 0 || pn > 4)
+  int i;
+  uint inum;
+  struct inode* ip = namei(path);
+
+  // empty path or illegal partition number or path not a Dir
+  if (*path != '\0' || sizeof(*path) == 0 || pn > 4 || ip->type != T_DIR)
     return -1;
   
-  int p, i;
-  struct inode* mnt_inode = namei(path);
-  
-  //if the path and pn is alraady mounted so there is nothing to do
-  if(i = isMounted(pn, mnt_inode))
+  inum = ip->inum;
+  //if the key is already mounted so there is nothing to done
+  if(isMount(inum, pn))
     goto end;    
-  
-  memmove(mountable[i].key.inode, mnt_inode, strlen(mnt_inode));
-  mountable[i].key
 
-  //mountArr.mounts[partition].partition = partitionNum;
-  //mountArr.mounts[partition].used = 1;
+  i = findFreeEntry();
+  // add new entry in the mountable  
+  mountable[i].key.partition_id = curr_partition;
+  mountable[i].key.inum = inum;
+  //updatePair(&(mountable[i].key), curr_partition, inum);
+  mountable[i].value.partition_id = pn;
+  mountable[i].key.inum = ROOTINO;
+  //updatePair(&(mountable[i].value), pn, ROOTINO);
+  mountable[i].used = 1;
    
   end:
     cprintf("Directory: %s is mounted to partition number:%d\n", path, pn);

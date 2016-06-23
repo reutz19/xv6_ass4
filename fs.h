@@ -64,7 +64,8 @@ typedef struct pair pair;
 
 struct pair {
   uint partition_id;
-  struct *inode inode;
+  //struct *inode inode;
+  uint inum;
 }; 
 
 struct mapEntry {

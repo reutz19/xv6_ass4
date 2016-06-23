@@ -1,13 +1,6 @@
-#include "param.h"
-#include "fcntl.h"
-#include "syscall.h"
-#include "traps.h"
-#include "memlayout.h"
-#include "x86.h"
-#include "fs.h"
-#include "user.h"
-#include "stat.h"
 #include "types.h"
+#include "stat.h"
+#include "user.h"
 
 int main(int argc, char *argv[])
 {

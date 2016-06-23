@@ -172,6 +172,7 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
+	_mount\
 
 fs.img: mkfs bootblock kernel README $(UPROGS)
 	./mkfs fs.img bootblock kernel README $(UPROGS)
