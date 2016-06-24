@@ -233,11 +233,11 @@ main(int argc, char *argv[])
       strncpy(de.name, argv_tmp, DIRSIZ);
       iappend(rootino, &de, sizeof(de));
 
-      if (strlen(argv_tmp) == 2 && strncmp(argv[i], "sh", 2) == 0){
+      if (strlen(argv_tmp) == 2 && strncmp(argv_tmp, "sh", 2) == 0){
           printf("mkfs: sh exist \n");
           sh_exist = 1;
       }
-      else if (strlen(argv_tmp) == 4 && strncmp(argv[i], "init", 4) == 0) {
+      else if (strlen(argv_tmp) == 4 && strncmp(argv_tmp, "init", 4) == 0) {
         printf("mkfs: init exist \n");
         init_exist = 1;
       }
@@ -250,6 +250,7 @@ main(int argc, char *argv[])
     } // end inside for loop
 
     if (sh_exist && init_exist) {
+      printf("partition number:%d, sh_exist && init_exist\n",j);
       curr_partition->flags = PART_BOOTABLE;
       curr_partition->type  = FS_INODE;
     }
@@ -277,6 +278,15 @@ main(int argc, char *argv[])
 void
 wsect(uint sec, void *buf)
 {
+  struct dpartition* curr_partition;
+
+  int j;
+  for(j = 0; j < NPARTITIONS; j++) 
+  {
+    curr_partition = &(mbr.partitions[j]);
+    printf("partition %d curr_partition->flags=%d currpr_offset=%d\n", j, curr_partition->flags, currpr_offset);
+  }
+
   if(lseek(fsfd, (sec + currpr_offset) * BSIZE, 0) != (sec + currpr_offset) * BSIZE){
     perror("lseek");
     exit(1);

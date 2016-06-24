@@ -88,6 +88,7 @@ initilizeMountable()
 void
 readmbr(int dev, struct mbr* dmbr)
 {
+  //cprintf("inside readmbr, curr_partition=%d", curr_partition);
   int i;
   struct buf *bp;
 
@@ -98,7 +99,7 @@ readmbr(int dev, struct mbr* dmbr)
   //cprintf("readmbr: mbr magic [0]=%p [1]=%p \n", dmbr->magic[0], dmbr->magic[1]);
   for (i = 0; i < NPARTITIONS; i++)
   {    
-    //cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
+    cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
     
     if (dmbr->partitions[i].flags == PART_BOOTABLE || dmbr->partitions[i].flags == PART_BOTH)
     {
