@@ -75,5 +75,4 @@ struct mapEntry {
   uint partition_id;
   struct inode *ip;
   int used;
-  //char path[50];
 };

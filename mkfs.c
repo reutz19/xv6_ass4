@@ -79,24 +79,12 @@ write_kernel(char* kernel_file)
     exit(1);
   }
 
-  // Get kernel size (bytes)
-  /*off_t fsize;
-  fsize = lseek(kernel_fd, 0, SEEK_END);
-  lseek(kernel_fd, 0, SEEK_SET);
-  */
-  // Copy block after block
-  //int kernel_size = fsize;
-  //int copy_size = (kernel_size > BSIZE) ? BSIZE : kernel_size;
   memset(buf, 0, BSIZE);
     
   while (read(kernel_fd, buf, BSIZE) > 0) 
   {
     wsect(0, buf);    // 0 is relative to currpr_offset
-    //kernel_size -= copy_size;
-    // Determine size to copy
-    //copy_size = (kernel_size > BSIZE) ? BSIZE : kernel_size;
     memset(buf, 0, BSIZE);
-    
     // Update next block and size left
     ++currpr_offset;
   }
