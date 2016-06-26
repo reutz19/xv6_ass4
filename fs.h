@@ -64,17 +64,16 @@ typedef struct pair pair;
 
 struct pair {
   uint partition_id;
-  //struct *inode inode;
-  uint inum;
+  char path[DIRSIZ];
 }; 
 
 void initilizeMountable();
 
 struct mapEntry {
-  //pair key;
-  //pair value;
+  pair key;
+  pair value;
   uint partition_id;
   struct inode *ip;
   int used;
-  char path[50];
+  //char path[50];
 };
