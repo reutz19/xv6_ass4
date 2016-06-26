@@ -169,7 +169,7 @@ main(int argc, char *argv[])
     printf("partition %d allocated \n", j);
     //setup partition j
     curr_partition = &(mbr.partitions[j]);
-    curr_partition->flags  = -1; //PART_ALLOCATED;
+    curr_partition->flags  = PART_ALLOCATED;
     curr_partition->type   = -1; //FS_INODE;
     curr_partition->offset = currpr_offset;
     curr_partition->size   = FSSIZE;
@@ -251,7 +251,7 @@ main(int argc, char *argv[])
 
     if (sh_exist && init_exist) {
       printf("partition number:%d, sh_exist && init_exist\n",j);
-      curr_partition->flags = PART_BOOTABLE;
+      curr_partition->flags = PART_BOTH;
       curr_partition->type  = FS_INODE;
     }
       
@@ -278,15 +278,6 @@ main(int argc, char *argv[])
 void
 wsect(uint sec, void *buf)
 {
-  struct dpartition* curr_partition;
-
-  int j;
-  for(j = 0; j < NPARTITIONS; j++) 
-  {
-    curr_partition = &(mbr.partitions[j]);
-    printf("partition %d curr_partition->flags=%d currpr_offset=%d\n", j, curr_partition->flags, currpr_offset);
-  }
-
   if(lseek(fsfd, (sec + currpr_offset) * BSIZE, 0) != (sec + currpr_offset) * BSIZE){
     perror("lseek");
     exit(1);

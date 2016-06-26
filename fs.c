@@ -38,7 +38,7 @@ get_bootable_partition(void)
   int i;
   for (i = 0; i < NPARTITIONS; i++)
   {        
-    if ((mbr.partitions[i].flags & PART_ALLOCATED) &&
+    if ((mbr.partitions[i].flags & PART_BOTH) ||
         (mbr.partitions[i].flags & PART_BOOTABLE) ) 
     {
       return i;
@@ -121,9 +121,9 @@ readsb(int dev, struct superblock *sb)
   struct dpartition *dpr;
 
   if ((bootable_partition = get_bootable_partition()) < 0)
-    panic("no bootablr partition");
+    panic("no bootable partition");
   else
-    dpr = &(mbr.partitions[bootable_partition]);
+    dpr = &(mbr.partitions[curr_partition]);
 
   sb_off = dpr->offset;
   bp = bread(dev, sb_off); // read device bootable partition superblock 
@@ -345,8 +345,8 @@ iget(uint dev, uint inum)
   ip->inum = inum;
   ip->ref = 1;
   ip->flags = 0;
-  ip->prnum = bootable_partition; 
-  //ip->prnum = curr_partition;
+  //ip->prnum = bootable_partition; 
+  ip->prnum = curr_partition;
   release(&icache.lock);
 
   return ip;
@@ -711,7 +711,11 @@ namex(char *path, int nameiparent, char *name)
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
-
+  /*
+  else
+    ip = idup(proc->cwd);
+  */
+  
   else {
     // check whether path is already mounted
     ip = findInMountable(path); 
@@ -724,6 +728,7 @@ namex(char *path, int nameiparent, char *name)
     // path is not mounted, continue as usuall
     ip = idup(proc->cwd);
   }
+  
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
