@@ -169,7 +169,7 @@ main(int argc, char *argv[])
     printf("partition %d allocated \n", j);
     //setup partition j
     curr_partition = &(mbr.partitions[j]);
-    curr_partition->flags  = -1; //PART_ALLOCATED;
+    curr_partition->flags  = PART_ALLOCATED;
     curr_partition->type   = -1; //FS_INODE;
     curr_partition->offset = currpr_offset;
     curr_partition->size   = FSSIZE;
@@ -251,7 +251,7 @@ main(int argc, char *argv[])
 
     if (sh_exist && init_exist) {
       printf("partition number:%d, sh_exist && init_exist\n",j);
-      curr_partition->flags = PART_BOOTABLE;
+      curr_partition->flags = PART_BOTH;
       curr_partition->type  = FS_INODE;
     }
       

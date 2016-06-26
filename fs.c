@@ -101,7 +101,7 @@ readmbr(int dev, struct mbr* dmbr)
   {    
     cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
     
-    if (dmbr->partitions[i].flags == PART_BOOTABLE || dmbr->partitions[i].flags == PART_BOTH)
+    if (dmbr->partitions[i].flags & PART_ALLOCATED)
     {
       cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
             i,
@@ -711,8 +711,9 @@ namex(char *path, int nameiparent, char *name)
 
   if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
-
-  else {
+  else
+    ip = idup(proc->cwd);
+  /*else {
     // check whether path is already mounted
     ip = findInMountable(path); 
     if(ip)
@@ -723,7 +724,7 @@ namex(char *path, int nameiparent, char *name)
     }
     // path is not mounted, continue as usuall
     ip = idup(proc->cwd);
-  }
+  }*/
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
