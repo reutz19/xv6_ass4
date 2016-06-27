@@ -99,9 +99,9 @@ readmbr(int dev, struct mbr* dmbr)
 
   for (i = 0; i < NPARTITIONS; i++)
   {    
-    cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
+    //cprintf("readmbr: partitions %d flags = %d \n", i, dmbr->partitions[i].flags);
     
-    if (dmbr->partitions[i].flags == PART_BOOTABLE || dmbr->partitions[i].flags == PART_BOTH)
+    if (dmbr->partitions[i].flags & PART_ALLOCATED)
     {
       cprintf("Partition %d: bootable %s, type %s, offset %d, size %d\n", 
             i,
