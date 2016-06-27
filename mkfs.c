@@ -213,7 +213,6 @@ main(int argc, char *argv[])
       if(argv_tmp[0] == '_') 
         argv_tmp++;
 
-      printf("mkfs: alloc %s\n", argv[i]);
       inum = ialloc(T_FILE);
 
       bzero(&de, sizeof(de));
@@ -222,11 +221,9 @@ main(int argc, char *argv[])
       iappend(rootino, &de, sizeof(de));
 
       if (strlen(argv_tmp) == 2 && strncmp(argv_tmp, "sh", 2) == 0){
-          printf("mkfs: sh exist \n");
           sh_exist = 1;
       }
       else if (strlen(argv_tmp) == 4 && strncmp(argv_tmp, "init", 4) == 0) {
-        printf("mkfs: init exist \n");
         init_exist = 1;
       }
 
@@ -238,7 +235,6 @@ main(int argc, char *argv[])
     } // end inside for loop
 
     if (sh_exist && init_exist) {
-      printf("partition number:%d, sh_exist && init_exist\n",j);
       curr_partition->flags = PART_BOTH;
       curr_partition->type  = FS_INODE;
     }
