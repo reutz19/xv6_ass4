@@ -761,6 +761,8 @@ nameiparent(char *path, char *name)
   return namex(path, 1, name);
 }
 
+
+// ----------- Mount framework ---------------------
 int
 findFreeEntry()
 {  
@@ -784,7 +786,7 @@ updatePair(pair *pair, uint partition_id, char* path)
 }
 
 
-// return 1 if pair1 is equal to pair2
+// return 1 if pair1 is equal to pair2 (deep copy comparison)
 int
 cmpPair(pair *pair1, pair *pair2)
 {
@@ -793,6 +795,20 @@ cmpPair(pair *pair1, pair *pair2)
   return 0;
 }
 
+// check if key=<partition_id, path> is already exist in the Mount Table
+// if found - return the index in the table, else return -1
+int
+isMount(pair *key)
+{
+  int i;
+  for (i=0; i<(TOTALINODES); i++)
+  {
+    if(cmpPair(&(mountable[i].key), key))
+      return i;
+  }
+
+  return -1;
+}
 
 // return an inode if the key:<partition id, path> already exist in the mount table
 // else, return 0
@@ -831,9 +847,9 @@ printMounTable()
 // return 0 on success, -1 on failure (path does not exists/not a directory etc.)
 int mount(char* path, uint pn)
 {
-  struct inode* ip = namei(path);
   int mapEntryIdx;
-  ilock(ip);
+  pair tmp_key;
+  updatePair(&tmp_key, curr_partition, path);
 
   // illegal partition number
   if (pn > 3  || pn < 0){
@@ -841,27 +857,38 @@ int mount(char* path, uint pn)
     goto failure;
   }
 
-  // path is not a directory
+  //check if the mount arguments are already mounted. if yes than overide them
+  if((mapEntryIdx = isMount(&tmp_key)) != -1)
+  {
+    cprintf("the key isMounted to entry %d\n", mapEntryIdx);
+    goto upadeMountTable;
+  }
+
+  struct inode* ip = namei(path);
+  ilock(ip);
+
+  // path is not a directory or non-valid
   if(ip->type != T_DIR || path == '\0' || sizeof(path) == 0){
     cprintf("cannot mount to a file: %s, path must be a directory or not empty\n", path);
     goto failure;
   }
   iunlock(ip);
 
-  // recievd valid arguments
+  // the arguments arn't mounted so need to find a free slot
   mapEntryIdx = findFreeEntry();
 
-  mountable[mapEntryIdx].key.partition_id = curr_partition;
-  memset(mountable[mapEntryIdx].key.path, 0, sizeof(mountable[mapEntryIdx].key.path));
-  memmove(mountable[mapEntryIdx].key.path, path, strlen(path));
-  
-  mountable[mapEntryIdx].value.partition_id = pn;
-  mountable[mapEntryIdx].ip = ip;
-  mountable[mapEntryIdx].used = 1;
-  
-  printMounTable();
-  cprintf("Directory: %s is mounted to partition number:%d\n", path, pn);
-  return 0;
+  upadeMountTable:
+    mountable[mapEntryIdx].key.partition_id = curr_partition;
+    memset(mountable[mapEntryIdx].key.path, 0, sizeof(mountable[mapEntryIdx].key.path));
+    memmove(mountable[mapEntryIdx].key.path, path, strlen(path));
+    
+    mountable[mapEntryIdx].value.partition_id = pn;
+    mountable[mapEntryIdx].ip = ip;
+    mountable[mapEntryIdx].used = 1;
+    
+    printMounTable();
+    cprintf("Directory: %s is mounted to partition number:%d\n", path, pn);
+    return 0;
 
   failure:
     iunlock(ip);
